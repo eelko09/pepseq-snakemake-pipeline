@@ -1,0 +1,30 @@
+# macOS / editor noise
+.DS_Store
+
+# Python cache / bytecode
+__pycache__/
+*.py[cod]
+
+# Snakemake runtime state
+.snakemake/
+
+# Pipeline-generated outputs and logs
+results/
+results_dryrun/
+bins/
+pairwise_scatterplots/
+automateBins.log
+Sblk_names_forBins.txt
+sblk_names.txt
+*_Mon_*.log
+*_Tue_*.log
+*_Wed_*.log
+*_Thu_*.log
+*_Fri_*.log
+*_Sat_*.log
+*_Sun_*.log
+
+# Local environment files
+.env
+.venv/
+venv/

@@ -1,0 +1,31 @@
+# Local dry-run config for DAG validation inside this repository.
+# Uses files already present under results/qc as stand-in inputs.
+
+raw_counts_tsv: "results/qc/00_shortened_counts.tsv"
+pairs_tsv: "results/qc/02_pairs_pearson.tsv"
+output_dir: "results_dryrun"
+sblk_id: "Sblk"
+rc_cutoff: 105000
+downsample_max: 50000
+pearson_cutoff: 0.5
+
+# Required by Snakefile at parse time
+autopepsirf_conda_path: "/Users/evanelko/anaconda3/envs/qiime2-tiny-2024.2"
+autopepsirf_exact_z_thresh: "10,10"
+autopepsirf_exact_cs_thresh: "0"
+autopepsirf_hdi: 0.75
+autopepsirf_negative_id: "Sblk"
+autopepsirf_raw_constraint: 105000
+autopepsirf_exact_zenrich_thresh: "25 20 15 10"
+autopepsirf_tsv_base_str: "IM0221_IM227_IM230_IN2T.3_raw_3mm"
+autopepsirf_pepsirf_tsv_dir: "IM0221_IM227_IM230_IN2T.3_TSV-aps"
+
+# Keep optional stages disabled for dry-run validation
+run_autopepsirf: false
+run_psea: false
+run_zscore_correlation_qc: false
+
+# Required parse-time PSEA keys (stage remains disabled)
+psea_conda_path: "/Users/evanelko/anaconda3/envs/qiime2-pepsirf-merged"
+psea_peptide_sets_gmt: "IN2T.gmt"
+psea_species_tsv: "IN2T_species.tsv"

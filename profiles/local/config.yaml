@@ -1,0 +1,17 @@
+# Snakemake profile for local/laptop execution.
+# Usage:
+#   snakemake --profile /Users/evanelko/Documents/pepseq_snakemake/profiles/local
+
+cores: 4
+jobs: 4
+rerun-incomplete: true
+keep-going: true
+printshellcmds: true
+latency-wait: 30
+restart-times: 1
+use-conda: true
+
+# Global caps for local runs (rule-specific requests can be overridden by these caps).
+resources:
+  mem_mb: 16000
+

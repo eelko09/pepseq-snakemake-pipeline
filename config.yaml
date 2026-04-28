@@ -1,0 +1,115 @@
+# ------------------------------------------------------------
+# Required inputs
+# ------------------------------------------------------------
+raw_counts_tsv: 'table_raw_full_IM221_IM227_IM230_IN2T.3.tsv'
+pairs_tsv: '/Users/evanelko/Library/CloudStorage/GoogleDrive-ee462@nau.edu/Shared drives/ViralPepSeq_Data/Analysis/TEDDY/Analysis/createPairs/pairs.tsv'
+sblk_id: Sblk
+
+# ------------------------------------------------------------
+# QC thresholds and filters
+# ------------------------------------------------------------
+rc_cutoff: 105000
+run_correlation_qc: true
+pearson_cutoff: 0.5
+run_zscore_correlation_qc: false
+force_rerun_with_token: false
+zscore_pearson_cutoff: 0.5
+zscore_log_pearson_cutoff: null
+downsample_max: 50000
+downsample_min: 0
+zero_sd_mult: 2.0
+zero_filter_seed: 123
+zero_hist_output: "{output_dir}/qc/02_zero_counts_hist.png"
+
+# ------------------------------------------------------------
+# Correlation scatterplots (optional)
+# ------------------------------------------------------------
+correlation_scatterplots: false
+correlation_scatterplot_dir: results/qc/pairwise_scatterplots
+correlation_plot_format: png
+correlation_plot_dpi: 300
+correlation_max_pairs: null
+
+# ------------------------------------------------------------
+# Python script directory + optional per-script overrides
+# ------------------------------------------------------------
+python_scripts_dir: /Users/evanelko/Documents/pepseq_snakemake/python_scripts
+
+# Optional per-script overrides (uncomment only if needed):
+# rc_script: /path/to/QC_RC_thresh.py
+# correlation_script: /path/to/pairwise_pearson_from_pairs.py
+# zero_filter_script: /path/to/downsample2max_zero_filter.py
+# automate_bins_script: /path/to/automateBins.py
+# qc_failure_merge_script: /path/to/merge_qc_failures.py
+# shorten_columns_script: /path/to/shorten_column_names.py
+# remove_controls_script: /path/to/remove_control_samples.py
+# filter_pairs_script: /path/to/filter_pairs_by_columns.py
+
+# ------------------------------------------------------------
+# Per-rule HPC resources (threads, mem_mb, runtime in minutes)
+# ------------------------------------------------------------
+rule_resources:
+  init_run_token: {threads: 1, mem_mb: 500, runtime: 5}
+  shorten_columns: {threads: 1, mem_mb: 2000, runtime: 30}
+  rc_filter: {threads: 1, mem_mb: 4000, runtime: 60}
+  zero_count_filter: {threads: 1, mem_mb: 6000, runtime: 90}
+  correlation_filter: {threads: 1, mem_mb: 8000, runtime: 120}
+  summarize_qc_failures: {threads: 1, mem_mb: 2000, runtime: 30}
+  automate_bins: {threads: 1, mem_mb: 12000, runtime: 240}
+  prepare_autopepsirf_raw: {threads: 1, mem_mb: 4000, runtime: 60}
+  run_autopepsirf: {threads: 1, mem_mb: 32000, runtime: 720}
+  shorten_psea_zscore: {threads: 1, mem_mb: 4000, runtime: 60}
+  filter_psea_pairs: {threads: 1, mem_mb: 2000, runtime: 30}
+  zscore_correlation_filter: {threads: 1, mem_mb: 8000, runtime: 120}
+  run_psea: {threads: 1, mem_mb: 32000, runtime: 720}
+
+# ------------------------------------------------------------
+# Output controls
+# ------------------------------------------------------------
+output_dir: /scratch/ee462/snakemake/testing/results
+qiime_workdir: /scratch/ee462/snakemake/pepsirf_snakemake_pipeline
+automatebins_outprefix: qc_filtered
+
+# ------------------------------------------------------------
+# AutomateBins options
+# ------------------------------------------------------------
+automatebins_top_fraction: 0.20
+automatebins_min_readcount_sum: 0
+automatebins_no_scatterplots: false
+automatebins_max_pairs: null
+automatebins_plot_format: png
+automatebins_plot_dpi: 300
+
+# ------------------------------------------------------------
+# AutoPepsirf options (required if run_autopepsirf: true)
+# ------------------------------------------------------------
+run_autopepsirf: false
+autopepsirf_conda_path: /Users/evanelko/anaconda3/envs/qiime2-tiny-2024.2
+autopepsirf_negative_id: Sblk
+autopepsirf_exact_z_thresh: 10,10
+autopepsirf_exact_cs_thresh: 0
+autopepsirf_raw_constraint: 105000
+autopepsirf_hdi: 0.75
+autopepsirf_exact_zenrich_thresh: 25 20 15 10
+autopepsirf_tsv_base_str: IM0221_IM227_IM230_IN2T.3_raw_3mm
+autopepsirf_pepsirf_tsv_dir: IM0221_IM227_IM230_IN2T.3_TSV-aps
+
+# ------------------------------------------------------------
+# PSEA options (required if run_psea: true; run_psea requires run_autopepsirf)
+# ------------------------------------------------------------
+run_psea: false
+psea_conda_path: /Users/evanelko/anaconda3/envs/qiime2-pepsirf-merged
+psea_epitope_metadata: IN2T_metadata.tsv
+psea_peptide_sets_gmt: IN2T.gmt
+psea_species_tsv: IN2T_species.tsv
+psea_threshold: 0.75
+psea_pval_thresh: 0.05
+psea_nes_thresh: 1
+psea_min_size: 3
+psea_max_size: 5000
+psea_permutation_num: 10000
+psea_spline_type: py-smooth
+psea_degree: 3
+psea_vis_outputs_dir: "{output_dir}/psea/output_vis"
+psea_iterative_analysis: true
+psea_seed: 149

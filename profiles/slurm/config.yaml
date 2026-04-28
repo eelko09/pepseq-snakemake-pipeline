@@ -1,0 +1,28 @@
+# Snakemake profile for Slurm HPC execution.
+# Usage:
+#   snakemake --profile /Users/evanelko/Documents/pepseq_snakemake/profiles/slurm
+#
+# This profile expects each rule to define:
+# - threads
+# - resources.mem_mb
+# - resources.runtime (minutes)
+
+executor: slurm
+jobs: 100
+rerun-incomplete: true
+keep-going: true
+printshellcmds: true
+latency-wait: 120
+restart-times: 1
+use-conda: true
+
+# Default resources for rules that do not specify them.
+default-resources:
+  - mem_mb=4000
+  - runtime=60
+
+# Standard Slurm account/partition knobs (override at runtime if needed):
+#   snakemake --profile ... --set-resources rule:runtime=240 --slurm-account myacct
+slurm-account: your_account
+# slurm-partition: your_partition
+# slurm-qos: your_qos

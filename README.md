@@ -71,22 +71,22 @@ snakemake --dry-run --snakefile Snakefile --configfile config.dryrun.yaml
 
 ### HPC dry-run (SLURM profile)
 ```bash
-SNAKEMAKE_PROFILE=/scratch/ee462/snakemake/pepsirf_snakemake_pipeline/profiles/slurm \
-/scratch/ee462/snakemake/pepsirf_snakemake_pipeline/run_snakemake_linux_hpc.sh --dry-run
+SNAKEMAKE_PROFILE=/path/to/snakemake/pepsirf_snakemake_pipeline/profiles/slurm \
+/path/to/snakemake/pepsirf_snakemake_pipeline/run_snakemake_linux_hpc.sh --dry-run
 ```
 
 ### HPC run (SLURM profile)
 ```bash
-SNAKEMAKE_PROFILE=/scratch/ee462/snakemake/pepsirf_snakemake_pipeline/profiles/slurm \
-/scratch/ee462/snakemake/pepsirf_snakemake_pipeline/run_snakemake_linux_hpc.sh --rerun-triggers mtime
+SNAKEMAKE_PROFILE=/path/to/snakemake/pepsirf_snakemake_pipeline/profiles/slurm \
+/path/to/snakemake/pepsirf_snakemake_pipeline/run_snakemake_linux_hpc.sh --rerun-triggers mtime
 ```
 
 ## Running With `tmux` on HPC (recommended)
 ```bash
 ssh <cluster>
 tmux new -s snakemake
-cd /scratch/ee462/snakemake/pepsirf_snakemake_pipeline
-SNAKEMAKE_PROFILE=/scratch/ee462/snakemake/pepsirf_snakemake_pipeline/profiles/slurm \
+cd /path/to/snakemake/pepsirf_snakemake_pipeline
+SNAKEMAKE_PROFILE=/path/to/snakemake/pepsirf_snakemake_pipeline/profiles/slurm \
 ./run_snakemake_linux_hpc.sh --rerun-triggers mtime
 ```
 
@@ -221,18 +221,18 @@ Zero-count QC stage outputs:
 
 Example:
 ```bash
-WORKDIR=/scratch/ee462/snakemake/pepsirf_snakemake_pipeline \
-SNAKEFILE=/scratch/ee462/snakemake/pepsirf_snakemake_pipeline/Snakefile \
-CONFIGFILE=/scratch/ee462/snakemake/pepsirf_snakemake_pipeline/config_hpc.yaml \
-SNAKEMAKE_PROFILE=/scratch/ee462/snakemake/pepsirf_snakemake_pipeline/profiles/slurm \
+WORKDIR=/path/to/snakemake/pepsirf_snakemake_pipeline \
+SNAKEFILE=/path/to/snakemake/pepsirf_snakemake_pipeline/Snakefile \
+CONFIGFILE=/path/to/snakemake/pepsirf_snakemake_pipeline/config_hpc.yaml \
+SNAKEMAKE_PROFILE=/path/to/snakemake/pepsirf_snakemake_pipeline/profiles/slurm \
 SNAKEMAKE_JOBS=100 \
-/scratch/ee462/snakemake/pepsirf_snakemake_pipeline/run_snakemake_linux_hpc.sh --dry-run
+/path/to/snakemake/pepsirf_snakemake_pipeline/run_snakemake_linux_hpc.sh --dry-run
 ```
 
 ## Common Commands
 ### Unlock after interrupted run
 ```bash
-/scratch/ee462/snakemake/pepsirf_snakemake_pipeline/run_snakemake_linux_hpc.sh --unlock
+/path/to/snakemake/pepsirf_snakemake_pipeline/run_snakemake_linux_hpc.sh --unlock
 ```
 
 ### Re-run from incomplete jobs
@@ -240,8 +240,8 @@ SNAKEMAKE_JOBS=100 \
 
 ### Force one setting at runtime
 ```bash
-/scratch/ee462/snakemake/pepsirf_snakemake_pipeline/run_snakemake_linux_hpc.sh \
---config raw_counts_tsv=/scratch/ee462/data/table.tsv
+/path/to/snakemake/pepsirf_snakemake_pipeline/run_snakemake_linux_hpc.sh \
+--config raw_counts_tsv=/path/to/data/table.tsv
 ```
 
 ## Troubleshooting

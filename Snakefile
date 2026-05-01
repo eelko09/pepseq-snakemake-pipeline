@@ -28,6 +28,7 @@ RC_TOTALS_OUT = f"{QC_DIR}/01_rc_total_readcounts.tsv"
 # Temporary pass-list used to build RC filtered matrix via pepsirf subjoin.
 RC_PASS_OUT = f"{QC_DIR}/01_rc_pass_samples.tsv"
 ZERO_OUT = f"{QC_DIR}/02_zero_filtered.tsv"
+ZERO_CS_OUT = f"{QC_DIR}/02_zero_filtered_CS.tsv"
 ZERO_FAIL_OUT = f"{QC_DIR}/02_zero_failed_samples.tsv"
 ZERO_ALL_COUNTS_OUT = f"{QC_DIR}/02_zero_all_counts.tsv"
 ZERO_DOWNSAMPLED_COUNTS_OUT = f"{QC_DIR}/02_zero_downsampled_counts.tsv"
@@ -195,6 +196,7 @@ ALL_TARGETS = [
     CORR_DATA_OUT,
     CORR_FAIL_OUT,
     ZERO_OUT,
+    ZERO_CS_OUT,
     ZERO_FAIL_OUT,
     ZERO_ALL_COUNTS_OUT,
     ZERO_DOWNSAMPLED_COUNTS_OUT,
@@ -369,11 +371,39 @@ rule zero_count_filter:
 
 
 # ------------------------------------------------------------
+# 02.5: Column-sum normalize zero-filtered counts for correlation QC
+# ------------------------------------------------------------
+rule zero_colsum_normalize:
+    input:
+        data=ZERO_OUT,
+        run_token=optional_run_token,
+    output:
+        data=ZERO_CS_OUT,
+    log:
+        f"{LOG_DIR}/02p5_zero_colsum_normalize.log"
+    threads: rule_threads("zero_colsum_normalize", 1)
+    resources:
+        mem_mb=rule_mem_mb("zero_colsum_normalize", 4000),
+        runtime=rule_runtime("zero_colsum_normalize", 60)
+    params:
+        log_dir=LOG_DIR,
+        pepsirf_conda_path=AUTOPEPSIRF_CONDA_PATH,
+    shell:
+        """
+        mkdir -p "{params.log_dir}"
+        conda run -p "{params.pepsirf_conda_path}" pepsirf norm \
+            -i {input.data:q} \
+            -a col_sum \
+            -o {output.data:q} > {log:q} 2>&1
+        """
+
+
+# ------------------------------------------------------------
 # 03: Pairwise Pearson correlation QC (optional)
 # ------------------------------------------------------------
 rule correlation_filter:
     input:
-        data=ZERO_OUT,
+        data=ZERO_CS_OUT,
         run_token=optional_run_token,
         pairs=lambda wildcards: PAIRS_FILE if RUN_CORRELATION_QC else [],
     output:

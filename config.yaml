@@ -11,6 +11,7 @@ sblk_id: Sblk
 rc_cutoff: 105000
 run_correlation_qc: true
 pearson_cutoff: 0.5
+correlation_keep_unpaired_samples: false
 run_zscore_correlation_qc: false
 force_rerun_with_token: false
 zscore_pearson_cutoff: 0.5

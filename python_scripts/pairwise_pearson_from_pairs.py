@@ -108,6 +108,14 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--keep-samples-not-in-pairs",
+        action="store_true",
+        help=(
+            "Also retain input samples that do not appear in Pair1/Pair2 anywhere in "
+            "the pairs file. Samples that do appear in pairs must still pass correlation QC."
+        ),
+    )
+    parser.add_argument(
         "--scatterplots",
         action="store_true",
         help="Generate scatterplots for kept pairs.",
@@ -233,9 +241,12 @@ def build_keep_columns(
     filtered_pairs_df: pd.DataFrame,
     always_keep_samples: list[str],
     input_sample_order: list[str],
+    extra_keep_samples: list[str] | None = None,
 ) -> list[str]:
     # Preserve original column order while keeping selected samples
     keep_set = set(always_keep_samples)
+    if extra_keep_samples is not None:
+        keep_set.update(extra_keep_samples)
 
     for _, row in filtered_pairs_df.iterrows():
         for col in (row["Pair1"], row["Pair2"]):
@@ -354,6 +365,9 @@ def main() -> None:
     always_keep_samples = [
         c for c in input_sample_columns if c.startswith(args.always_keep_prefix)
     ]
+    samples_in_pairs = set(pairs_df["Pair1"]).union(set(pairs_df["Pair2"]))
+    unpaired_samples = [c for c in input_sample_columns if c not in samples_in_pairs]
+    extra_keep_samples = unpaired_samples if args.keep_samples_not_in_pairs else []
 
     needed_columns = (
         set(pairs_df["Pair1"]).union(set(pairs_df["Pair2"])).union(set(always_keep_samples))
@@ -387,12 +401,17 @@ def main() -> None:
             else default_passing_samples_output_path(args.data_tsv)
         )
         output_df.to_csv(output_path, sep="\t", index=False)
-        write_passing_samples_tsv(passing_samples_output_path, always_keep_samples)
+        passing_samples = [
+            c
+            for c in input_sample_columns
+            if c in set(always_keep_samples).union(set(extra_keep_samples))
+        ]
+        write_passing_samples_tsv(passing_samples_output_path, passing_samples)
         if args.failed_samples_output is not None:
             failed_samples_with_values = [
                 (sample, no_pairs_reason)
                 for sample in input_sample_columns
-                if sample not in set(always_keep_samples)
+                if sample not in set(passing_samples)
             ]
             write_failed_samples_tsv(
                 args.failed_samples_output, failed_samples_with_values, STEP_NAME
@@ -407,6 +426,8 @@ def main() -> None:
         print(f"Correlation output: {output_path}")
         print(f"Passing samples output: {passing_samples_output_path}")
         print(f"Always-kept '{args.always_keep_prefix}' samples: {len(always_keep_samples)}")
+        if args.keep_samples_not_in_pairs:
+            print(f"Unpaired samples auto-kept: {len(extra_keep_samples)}")
         if args.failed_samples_output is not None:
             print(f"Samples failed {STEP_NAME}: {len(failed_samples_with_values)}")
         return
@@ -432,7 +453,10 @@ def main() -> None:
     filtered_pairs_df = output_df[pass_mask].copy()
     # Keep the union of samples present in passing pairs + always-keep samples.
     passing_samples = build_keep_columns(
-        filtered_pairs_df, always_keep_samples, input_sample_columns
+        filtered_pairs_df,
+        always_keep_samples,
+        input_sample_columns,
+        extra_keep_samples=extra_keep_samples,
     )
 
     output_path = args.output if args.output is not None else default_output_path(args.pairs_tsv)
@@ -468,6 +492,8 @@ def main() -> None:
     print(f"Correlation output: {output_path}")
     print(f"Passing samples output: {passing_samples_output_path}")
     print(f"Always-kept '{args.always_keep_prefix}' samples: {len(always_keep_samples)}")
+    if args.keep_samples_not_in_pairs:
+        print(f"Unpaired samples auto-kept: {len(extra_keep_samples)}")
     if args.failed_samples_output is not None:
         print(f"Samples failed {STEP_NAME}: {len(failed_samples)}")
 

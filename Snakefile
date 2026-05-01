@@ -391,6 +391,11 @@ rule correlation_filter:
     params:
         script=script_path("correlation_script", "pairwise_pearson_from_pairs.py"),
         cutoff=config["pearson_cutoff"],
+        keep_unpaired_flag=(
+            "--keep-samples-not-in-pairs"
+            if config.get("correlation_keep_unpaired_samples", False)
+            else ""
+        ),
         enabled=str(RUN_CORRELATION_QC).lower(),
         scatter_flags=correlation_scatter_flags(),
         log_dir=LOG_DIR,
@@ -404,6 +409,7 @@ rule correlation_filter:
                 --all-correlations-output {output.pairs_all:q} \
                 --passing-samples-output {output.pass_samples:q} \
                 --failed-samples-output {output.failed:q} \
+                {params.keep_unpaired_flag} \
                 {params.scatter_flags} > {log:q} 2>&1
             conda run -p "{params.pepsirf_conda_path}" pepsirf subjoin \
                 -i "{input.data},{output.pass_samples}" \
@@ -663,6 +669,11 @@ rule zscore_correlation_filter:
     params:
         script=script_path("correlation_script", "pairwise_pearson_from_pairs.py"),
         cutoff=config.get("zscore_pearson_cutoff", config["pearson_cutoff"]),
+        keep_unpaired_flag=(
+            "--keep-samples-not-in-pairs"
+            if config.get("correlation_keep_unpaired_samples", False)
+            else ""
+        ),
         log_cutoff_arg=(
             f"--log-pearson-cutoff {config['zscore_log_pearson_cutoff']}"
             if config.get("zscore_log_pearson_cutoff") is not None
@@ -678,7 +689,8 @@ rule zscore_correlation_filter:
             -o {output.pairs:q} \
             --all-correlations-output {output.pairs_all:q} \
             --passing-samples-output {output.pass_samples:q} \
-            --failed-samples-output {output.failed:q} > {log:q} 2>&1
+            --failed-samples-output {output.failed:q} \
+            {params.keep_unpaired_flag} > {log:q} 2>&1
         conda run -p "{params.pepsirf_conda_path}" pepsirf subjoin \
             -i "{input.data},{output.pass_samples}" \
             -o {output.data:q} >> {log:q} 2>&1

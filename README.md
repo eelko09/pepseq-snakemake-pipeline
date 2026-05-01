@@ -110,6 +110,7 @@ tmux attach -t snakemake
 - `rc_cutoff`: minimum readcount threshold for RC filter
 - `run_correlation_qc`: enable/disable pairwise correlation QC
 - `pearson_cutoff`: Pearson cutoff for correlation QC
+- `correlation_keep_unpaired_samples`: if `true`, keeps samples not present in `pairs_tsv`; samples present in `pairs_tsv` still must pass correlation QC
 - `run_zscore_correlation_qc`: optional Z-score correlation QC (requires AutoPepsirf)
 - `zscore_pearson_cutoff`: Pearson cutoff for Z-score QC
 - `force_rerun_with_token`: if `true`, injects run-token dependency to force recomputation

@@ -125,6 +125,7 @@ Zero-count QC stage outputs:
 - `02_zero_failed_samples.tsv`: samples that failed zero-count filtering
 - `02_zero_all_counts.tsv`: zero-count values for all samples considered by this step (pass + fail)
 - `02_zero_downsampled_counts.tsv`: full downsampled counts matrix used for zero-count QC (before pass/fail filtering)
+- `04_final_qc_summary.tsv`: per-sample QC summary with read counts, zero counts, column-sum normalized correlations, and z-score correlations (downstream values left blank if a sample was filtered earlier)
 
 ### Correlation scatterplot options
 - `correlation_scatterplots`: enable scatterplot generation
@@ -144,6 +145,7 @@ Zero-count QC stage outputs:
   - `shorten_columns_script`
   - `remove_controls_script`
   - `filter_pairs_script`
+  - `final_qc_summary_script`
 
 ### Per-rule resources
 - `rule_resources`: mapping of rule name to:

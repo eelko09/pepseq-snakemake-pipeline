@@ -41,6 +41,7 @@ CORR_FAIL_OUT = f"{QC_DIR}/03_correlation_failed_samples.tsv"
 # Temporary pass-list used to build correlation filtered matrix via pepsirf subjoin.
 CORR_PASS_OUT = f"{QC_DIR}/03_correlation_pass_samples.tsv"
 QC_FAILURE_SUMMARY_OUT = f"{QC_DIR}/04_qc_failed_samples_summary.tsv"
+FINAL_QC_SUMMARY_OUT = f"{QC_DIR}/04_final_qc_summary.tsv"
 ZSCORE_CORR_PAIRS_OUT = f"{QC_DIR}/05_zscore_pairs_pearson.tsv"
 ZSCORE_CORR_PAIRS_ALL_OUT = f"{QC_DIR}/05_zscore_pairs_pearson_all.tsv"
 ZSCORE_CORR_DATA_OUT = f"{QC_DIR}/05_zscore_correlation_filtered.tsv"
@@ -201,6 +202,7 @@ ALL_TARGETS = [
     ZERO_ALL_COUNTS_OUT,
     ZERO_DOWNSAMPLED_COUNTS_OUT,
     QC_FAILURE_SUMMARY_OUT,
+    FINAL_QC_SUMMARY_OUT,
     AUTOBINS_FINAL,
     AUTOBINS_NEG_CTRL,
 ]
@@ -477,6 +479,59 @@ rule summarize_qc_failures:
         """
         mkdir -p "{params.log_dir}"
         python3 "{params.script}" {input.rc:q} {input.corr:q} {input.zero:q} -o {output:q} > {log:q} 2>&1
+        """
+
+
+# ------------------------------------------------------------
+# 04.5: Final per-sample QC summary table
+# ------------------------------------------------------------
+rule final_qc_summary:
+    input:
+        rc_totals=RC_TOTALS_OUT,
+        rc_pass=RC_PASS_OUT,
+        zero_counts=ZERO_ALL_COUNTS_OUT,
+        zero_pass=ZERO_PASS_OUT,
+        corr_pairs_all=CORR_PAIRS_ALL_OUT,
+        corr_pass=CORR_PASS_OUT,
+        zscore_pairs_all=lambda wildcards: ZSCORE_CORR_PAIRS_ALL_OUT if RUN_ZSCORE_CORRELATION_QC else [],
+        zscore_pass=lambda wildcards: ZSCORE_CORR_PASS_OUT if RUN_ZSCORE_CORRELATION_QC else [],
+        run_token=optional_run_token,
+    output:
+        FINAL_QC_SUMMARY_OUT
+    log:
+        f"{LOG_DIR}/04_final_qc_summary.log"
+    threads: rule_threads("final_qc_summary", 1)
+    resources:
+        mem_mb=rule_mem_mb("final_qc_summary", 4000),
+        runtime=rule_runtime("final_qc_summary", 60)
+    params:
+        script=script_path("final_qc_summary_script", "final_qc_summary.py"),
+        zscore_pairs_path=ZSCORE_CORR_PAIRS_ALL_OUT,
+        zscore_pass_path=ZSCORE_CORR_PASS_OUT,
+        zscore_pairs_arg=(
+            f"--zscore-pairs-all-tsv {ZSCORE_CORR_PAIRS_ALL_OUT}"
+            if RUN_ZSCORE_CORRELATION_QC
+            else ""
+        ),
+        zscore_pass_arg=(
+            f"--zscore-pass-tsv {ZSCORE_CORR_PASS_OUT}"
+            if RUN_ZSCORE_CORRELATION_QC
+            else ""
+        ),
+        log_dir=LOG_DIR,
+    shell:
+        """
+        mkdir -p "{params.log_dir}"
+        python3 "{params.script}" \
+            {input.rc_totals:q} \
+            {input.rc_pass:q} \
+            {input.zero_counts:q} \
+            {input.zero_pass:q} \
+            {input.corr_pairs_all:q} \
+            {input.corr_pass:q} \
+            {params.zscore_pairs_arg} \
+            {params.zscore_pass_arg} \
+            -o {output:q} > {log:q} 2>&1
         """
 
 

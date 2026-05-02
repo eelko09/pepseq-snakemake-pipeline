@@ -45,6 +45,7 @@ python_scripts_dir: /Users/evanelko/Documents/pepseq_snakemake/python_scripts
 # shorten_columns_script: /path/to/shorten_column_names.py
 # remove_controls_script: /path/to/remove_control_samples.py
 # filter_pairs_script: /path/to/filter_pairs_by_columns.py
+# final_qc_summary_script: /path/to/final_qc_summary.py
 
 # ------------------------------------------------------------
 # Per-rule HPC resources (threads, mem_mb, runtime in minutes)
@@ -56,6 +57,7 @@ rule_resources:
   zero_count_filter: {threads: 1, mem_mb: 6000, runtime: 90}
   correlation_filter: {threads: 1, mem_mb: 8000, runtime: 120}
   summarize_qc_failures: {threads: 1, mem_mb: 2000, runtime: 30}
+  final_qc_summary: {threads: 1, mem_mb: 4000, runtime: 60}
   automate_bins: {threads: 1, mem_mb: 12000, runtime: 240}
   prepare_autopepsirf_raw: {threads: 1, mem_mb: 4000, runtime: 60}
   run_autopepsirf: {threads: 1, mem_mb: 32000, runtime: 720}

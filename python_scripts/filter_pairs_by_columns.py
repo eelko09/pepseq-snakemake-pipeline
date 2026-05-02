@@ -14,6 +14,7 @@ SEQUENCE_COL = "Sequence name"
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse CLI arguments for matrix-aware pair filtering."""
     parser = argparse.ArgumentParser(
         description=(
             "Subset pairs TSV to rows where Pair1 and Pair2 are both columns in the data TSV."
@@ -26,6 +27,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    """Keep only pair rows whose samples both exist in the matrix header."""
     args = parse_args()
 
     pairs_df = pd.read_csv(args.pairs_tsv, sep="\t")

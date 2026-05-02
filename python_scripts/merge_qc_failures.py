@@ -23,6 +23,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    """Concatenate per-step failure logs into a single de-duplicated table."""
     # Read all QC failure files and combine into a single table
     args = parse_args()
 

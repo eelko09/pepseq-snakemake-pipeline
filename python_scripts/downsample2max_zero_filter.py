@@ -54,6 +54,7 @@ def parse_counts_fallback(path: str, delim: str = "\t") -> dict[str, dict[str, i
     return out
 
 def main() -> None:
+    """Run downsampling and zero-count QC, then emit pass/fail artifacts."""
     # CLI options
     usage = '%prog [options]'
     p = optparse.OptionParser(usage=usage)
@@ -90,7 +91,7 @@ def main() -> None:
         )
         dataD = parse_counts_fallback(opts.data, delim=opts.delim)
     
-    # Initiate dictionary to hold downsampled data
+    # Hold per-sample peptide counts after max/min processing.
     toOut = {}
     
     # Step through each sample in the input data matrix to create
@@ -115,7 +116,7 @@ def main() -> None:
     zeroCountD = {s: sum(1 for _, v in dd.items() if v == 0) for s, dd in toOut.items()}
     zeroCounts = list(zeroCountD.values())
 
-    # Determine one-sided zero-count threshold
+    # Determine one-sided zero-count threshold and keep low-zero samples.
     zeroMean = statistics.mean(zeroCounts)
     # If only one sample survives min/max filtering, stdev is defined as 0.
     zeroStd = statistics.pstdev(zeroCounts) if len(zeroCounts) > 1 else 0.0

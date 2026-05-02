@@ -394,7 +394,7 @@ rule zero_colsum_normalize:
         """
         mkdir -p "{params.log_dir}"
         conda run -p "{params.pepsirf_conda_path}" pepsirf norm \
-            -i {input.data:q} \
+            -p {input.data:q} \
             -a col_sum \
             -o {output.data:q} > {log:q} 2>&1
         """

@@ -448,8 +448,8 @@ rule correlation_filter:
                 -o {output.data:q} >> {log:q} 2>&1
         else
             cp {input.data:q} {output.data:q}
-            printf "Pair1\\tPair2\\tPearson Correlation\\tComparison\\n" > {output.pairs:q}
-            printf "Pair1\\tPair2\\tPearson Correlation\\tComparison\\n" > {output.pairs_all:q}
+            printf "Pair1\\tPair2\\tPearson Correlation\\tComparison\\tSampleID\\n" > {output.pairs:q}
+            printf "Pair1\\tPair2\\tPearson Correlation\\tComparison\\tSampleID\\n" > {output.pairs_all:q}
             head -n 1 {input.data:q} | tr '\t' '\n' | tail -n +2 > {output.pass_samples:q}
             printf "Sample\\tFailed QC Step\\tFailure Value\\n" > {output.failed:q}
             printf "Correlation QC disabled; passthrough copy created.\\n" > {log:q}

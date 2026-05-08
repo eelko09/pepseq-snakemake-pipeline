@@ -2,13 +2,13 @@
 """Compute pairwise Pearson correlations from a pairs file.
 
 Inputs:
-1) Pairs TSV with columns: Pair1, Pair2, Comparison
+1) Pairs TSV with columns: Pair1, Pair2, Comparison, SampleID
 2) Data TSV with index column: Sequence name
    and sample columns matching Pair1/Pair2 names.
 
 Outputs:
 1) Filtered pairwise correlation TSV with columns:
-   Pair1, Pair2, Pearson Correlation, Comparison
+   Pair1, Pair2, Pearson Correlation, Pearson Correlation (log2(Z+8)-3), Comparison, SampleID
 2) Passing sample-name TSV (one column, no header) for downstream subjoin.
 """
 
@@ -25,13 +25,14 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-REQUIRED_PAIR_COLS = {"Pair1", "Pair2", "Comparison"}
+REQUIRED_PAIR_COLS = {"Pair1", "Pair2", "Comparison", "SampleID"}
 OUTPUT_COLS = [
     "Pair1",
     "Pair2",
     "Pearson Correlation",
     "Pearson Correlation (log2(Z+8)-3)",
     "Comparison",
+    "SampleID",
 ]
 SEQUENCE_COL = "Sequence name"
 STEP_NAME = "CORRELATION_FILTER"
@@ -181,7 +182,9 @@ def transform_for_log_correlation(data_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def compute_correlations(
-    pairs_df: pd.DataFrame, data_df: pd.DataFrame, log_data_df: pd.DataFrame
+    pairs_df: pd.DataFrame,
+    data_df: pd.DataFrame,
+    log_data_df: pd.DataFrame,
 ) -> pd.DataFrame:
     # Compute Pearson r for each pair, skipping missing columns
     results = []
@@ -193,6 +196,7 @@ def compute_correlations(
         pair1 = row["Pair1"]
         pair2 = row["Pair2"]
         comparison = row["Comparison"]
+        sample_id = row["SampleID"]
 
         if pair1 not in data_df.columns:
             skipped_missing += 1
@@ -228,6 +232,7 @@ def compute_correlations(
                 "Pearson Correlation": pearson_r,
                 "Pearson Correlation (log2(Z+8)-3)": log_pearson_r,
                 "Comparison": comparison,
+                "SampleID": sample_id,
             }
         )
 

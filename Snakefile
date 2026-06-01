@@ -808,6 +808,7 @@ rule run_psea:
         min_size=config.get("psea_min_size", 3),
         max_size=config.get("psea_max_size", 5000),
         permutation_num=config.get("psea_permutation_num", 10000),
+        max_workers=config.get("psea_max_workers", rule_threads("run_psea", 1)),
         spline_type=config.get("psea_spline_type", "r-smooth"),
         degree=config.get("psea_degree", 3),
         vis_outputs_dir=resolve_output_path(config.get("psea_vis_outputs_dir")),
@@ -852,6 +853,7 @@ rule run_psea:
             --p-min-size {params.min_size} \
             --p-max-size {params.max_size} \
             --p-permutation-num {params.permutation_num} \
+            --p-max-workers {params.max_workers} \
             --p-spline-type {params.spline_type} \
             --p-degree {params.degree} \
             --p-table-dir {params.table_dir} \

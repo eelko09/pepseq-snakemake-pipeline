@@ -111,6 +111,7 @@ psea_nes_thresh: 1
 psea_min_size: 3
 psea_max_size: 5000
 psea_permutation_num: 10000
+psea_max_workers: 1
 psea_spline_type: py-smooth
 psea_degree: 3
 psea_vis_outputs_dir: "{output_dir}/psea/output_vis"

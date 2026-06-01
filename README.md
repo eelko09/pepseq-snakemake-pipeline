@@ -189,6 +189,7 @@ Zero-count QC stage outputs:
 - `psea_min_size`
 - `psea_max_size`
 - `psea_permutation_num`
+- `psea_max_workers`
 - `psea_spline_type`
 - `psea_degree`
 - `psea_vis_outputs_dir`

@@ -3,6 +3,8 @@
 ## Overview
 This repository runs a QC + binning pipeline for PepSeq count matrices, with optional AutoPepsirf and PSEA stages.
 
+Previous workflow and config versions are preserved in `old/`.
+
 Main workflow file:
 - `Snakefile`
 
@@ -32,6 +34,7 @@ Profiles:
 - `python_scripts/QC_RC_thresh.py`: read-count threshold QC + pass/fail outputs
 - `python_scripts/downsample2max_zero_filter.py`: downsample, zero-count QC, and optional all-sample/downsampled outputs
 - `python_scripts/pairwise_pearson_from_pairs.py`: pairwise Pearson QC from pairs table
+- `python_scripts/skip_qc.py`: preserve matrices and write placeholder reports for disabled filters
 - `python_scripts/merge_qc_failures.py`: merge per-step QC failure logs
 - `python_scripts/filter_pairs_by_columns.py`: subset pairs to samples present in a matrix
 - `python_scripts/remove_control_samples.py`: remove selected control columns and restore full names
@@ -107,6 +110,9 @@ tmux attach -t snakemake
 - `sblk_id`: prefix used to identify superblock controls (example: `Sblk`)
 
 ### QC thresholds and toggles
+- `run_rc_qc`: enable/disable read-count filtering (default: true)
+- `run_zero_count_qc`: enable/disable downsampling and zero-count filtering (default: true)
+- `run_qc_summaries`: enable/disable summary reports (default: true); skipped metrics are blank
 - `rc_cutoff`: minimum readcount threshold for RC filter
 - `run_correlation_qc`: enable/disable pairwise correlation QC
 - `pearson_cutoff`: Pearson cutoff for correlation QC
@@ -158,8 +164,12 @@ Zero-count QC stage outputs:
 - `automatebins_outprefix`: output prefix for generated bin files
 
 ### AutomateBins options
+- `run_automate_bins`: generate bins and controls (default: true)
+- `autopepsirf_bins_tsv`: precomputed bins TSV, required when binning is disabled and AutoPepsirf is enabled
+- `autopepsirf_negative_control_tsv`: external control matrix TSV for the same mode; also used to remove controls from the raw AutoPepsirf input
 - `automatebins_top_fraction`
 - `automatebins_min_readcount_sum`
+- `automatebins_pepsirf_path`: `pepsirf` executable name or full path
 - `automatebins_no_scatterplots`
 - `automatebins_max_pairs`
 - `automatebins_plot_format`
@@ -178,9 +188,14 @@ Zero-count QC stage outputs:
 - `autopepsirf_pepsirf_tsv_dir`
 
 ### PSEA options (used when `run_psea: true`)
+The updated workflow imports scores, pairs, and peptide sets as QIIME artifacts and uses the new PSEA CLI options. AutoPepsirf uses `diffEnrich-tsv-no-viz`.
+
+Z-score correlation QC currently writes separate diagnostic outputs; PSEA uses the unfiltered shortened Z-score matrix. PSEA preparation still removes `Sblk` columns and columns containing NaNs.
+
 - `run_psea` (requires `run_autopepsirf: true`)
 - `psea_conda_path`
-- `psea_epitope_metadata`
+- `psea_peptide_metadata_qza`: pre-imported peptide metadata artifact
+- `psea_parallel_config`: QIIME parallel executor TOML; configure worker resources to match the HPC allocation
 - `psea_peptide_sets_gmt`
 - `psea_species_tsv`
 - `psea_threshold`
@@ -189,10 +204,8 @@ Zero-count QC stage outputs:
 - `psea_min_size`
 - `psea_max_size`
 - `psea_permutation_num`
-- `psea_max_workers`
 - `psea_spline_type`
 - `psea_degree`
-- `psea_vis_outputs_dir`
 - `psea_iterative_analysis`
 - `psea_seed`
 

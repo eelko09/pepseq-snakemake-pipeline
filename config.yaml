@@ -1,30 +1,73 @@
 # ------------------------------------------------------------
-# Required inputs
+# Per-rule HPC resources (threads, mem_mb, runtime in minutes)
+# Listed in workflow stage order; independent jobs may run concurrently.
 # ------------------------------------------------------------
-raw_counts_tsv: 'table_raw_full_IM221_IM227_IM230_IN2T.3.tsv'
-pairs_tsv: '/Users/evanelko/Library/CloudStorage/GoogleDrive-ee462@nau.edu/Shared drives/ViralPepSeq_Data/Analysis/TEDDY/Analysis/createPairs/pairs.tsv'
-sblk_id: Sblk
+rule_resources:
+  init_run_token: {threads: 1, mem_mb: 2000, runtime: 30}
+  shorten_columns: {threads: 1, mem_mb: 10000, runtime: 30}
+  rc_filter: {threads: 1, mem_mb: 50000, runtime: 30}
+  zero_count_filter: {threads: 1, mem_mb: 50000, runtime: 60}
+  zero_colsum_normalize: {threads: 1, mem_mb: 50000, runtime: 60}
+  correlation_filter: {threads: 1, mem_mb: 10000, runtime: 60}
+  summarize_qc_failures: {threads: 1, mem_mb: 10000, runtime: 30}
+  automate_bins: {threads: 1, mem_mb: 10000, runtime: 30}
+  prepare_autopepsirf_raw: {threads: 1, mem_mb: 10000, runtime: 30}
+  run_autopepsirf: {threads: 1, mem_mb: 80000, runtime: 2400}
+  shorten_psea_zscore: {threads: 1, mem_mb: 10000, runtime: 60}
+  filter_psea_pairs: {threads: 1, mem_mb: 10000, runtime: 30}
+  zscore_correlation_filter: {threads: 1, mem_mb: 10000, runtime: 60}
+  run_psea: {threads: 8, mem_mb: 10000, runtime: 3000}
 
 # ------------------------------------------------------------
-# QC thresholds and filters
+# Shared inputs, output locations, and PepSIRF environment
+# Replace /path/to placeholders before running. Relative paths are resolved
+# from the Snakemake working directory; defaults assume the repository root.
 # ------------------------------------------------------------
+raw_counts_tsv: /path/to/raw_counts.tsv
+pairs_tsv: /path/to/pairs.tsv
+output_dir: results
+qiime_workdir: .
+pepsirf_conda_path: /path/to/conda/envs/pepsirf
+
+# ------------------------------------------------------------
+# Python scripts and optional overrides
+# ------------------------------------------------------------
+python_scripts_dir: python_scripts
+
+# Optional per-script overrides (uncomment only if needed):
+# shorten_columns_script: /path/to/shorten_column_names.py
+# rc_script: /path/to/QC_RC_thresh.py
+# zero_filter_script: /path/to/downsample2max_zero_filter.py
+# correlation_script: /path/to/pairwise_pearson_from_pairs.py
+# skip_qc_script: /path/to/skip_qc.py
+# qc_failure_merge_script: /path/to/merge_qc_failures.py
+# automate_bins_script: /path/to/automateBins.py
+# remove_controls_script: /path/to/remove_control_samples.py
+# filter_pairs_script: /path/to/filter_pairs_by_columns.py
+
+# ------------------------------------------------------------
+# 01: Read-count QC
+# ------------------------------------------------------------
+# Disable each QC filter independently; skipped filters retain its input samples.
+run_rc_qc: true
 rc_cutoff: 105000
-run_correlation_qc: true
-pearson_cutoff: 0.5
-correlation_keep_unpaired_samples: false
-run_zscore_correlation_qc: false
-force_rerun_with_token: false
-zscore_pearson_cutoff: 0.5
-zscore_log_pearson_cutoff: null
-downsample_max: 50000
-downsample_min: 0
-zero_sd_mult: 2.0
-zero_filter_seed: 123
-zero_hist_output: "{output_dir}/qc/02_zero_counts_hist.png"
 
 # ------------------------------------------------------------
-# Correlation scatterplots (optional)
+# 02: Downsampling and zero-count QC
 # ------------------------------------------------------------
+# Disabling this stage also skips downsampling and its histogram.
+run_zero_count_qc: true
+downsample_max: 105000
+downsample_min: 0
+zero_sd_mult: 8.0
+zero_filter_seed: 123
+zero_hist_output: results/qc/02_zero_counts_hist.png
+
+# ------------------------------------------------------------
+# 03: Correlation QC (after column-sum normalization)
+# ------------------------------------------------------------
+run_correlation_qc: false
+pearson_cutoff: 0.1
 correlation_scatterplots: false
 correlation_scatterplot_dir: results/qc/pairwise_scatterplots
 correlation_plot_format: png
@@ -32,88 +75,81 @@ correlation_plot_dpi: 300
 correlation_max_pairs: null
 
 # ------------------------------------------------------------
-# Python script directory + optional per-script overrides
+# 04: QC summary reports
 # ------------------------------------------------------------
-python_scripts_dir: /Users/evanelko/Documents/pepseq_snakemake/python_scripts
-
-# Optional per-script overrides (uncomment only if needed):
-# rc_script: /path/to/QC_RC_thresh.py
-# correlation_script: /path/to/pairwise_pearson_from_pairs.py
-# zero_filter_script: /path/to/downsample2max_zero_filter.py
-# automate_bins_script: /path/to/automateBins.py
-# qc_failure_merge_script: /path/to/merge_qc_failures.py
-# shorten_columns_script: /path/to/shorten_column_names.py
-# remove_controls_script: /path/to/remove_control_samples.py
-# filter_pairs_script: /path/to/filter_pairs_by_columns.py
-# final_qc_summary_script: /path/to/final_qc_summary.py
+# Skipped-filter metrics are blank. The final summary waits for Z-score QC
+# when that later stage is enabled.
+run_qc_summaries: true
 
 # ------------------------------------------------------------
-# Per-rule HPC resources (threads, mem_mb, runtime in minutes)
+# 05: AutomateBins
 # ------------------------------------------------------------
-rule_resources:
-  init_run_token: {threads: 1, mem_mb: 500, runtime: 5}
-  shorten_columns: {threads: 1, mem_mb: 2000, runtime: 30}
-  rc_filter: {threads: 1, mem_mb: 4000, runtime: 60}
-  zero_count_filter: {threads: 1, mem_mb: 6000, runtime: 90}
-  correlation_filter: {threads: 1, mem_mb: 8000, runtime: 120}
-  summarize_qc_failures: {threads: 1, mem_mb: 2000, runtime: 30}
-  final_qc_summary: {threads: 1, mem_mb: 4000, runtime: 60}
-  automate_bins: {threads: 1, mem_mb: 12000, runtime: 240}
-  prepare_autopepsirf_raw: {threads: 1, mem_mb: 4000, runtime: 60}
-  run_autopepsirf: {threads: 1, mem_mb: 32000, runtime: 720}
-  shorten_psea_zscore: {threads: 1, mem_mb: 4000, runtime: 60}
-  filter_psea_pairs: {threads: 1, mem_mb: 2000, runtime: 30}
-  zscore_correlation_filter: {threads: 1, mem_mb: 8000, runtime: 120}
-  run_psea: {threads: 1, mem_mb: 32000, runtime: 720}
-
-# ------------------------------------------------------------
-# Output controls
-# ------------------------------------------------------------
-output_dir: /scratch/ee462/snakemake/testing/results
-qiime_workdir: /scratch/ee462/snakemake/pepsirf_snakemake_pipeline
+# true: generate bins and controls; false: use the external TSVs below.
+run_automate_bins: true
+sblk_id: Sblk
 automatebins_outprefix: qc_filtered
-
-# ------------------------------------------------------------
-# AutomateBins options
-# ------------------------------------------------------------
+automatebins_pepsirf_path: /path/to/conda/envs/pepsirf/bin/pepsirf
 automatebins_top_fraction: 0.20
 automatebins_min_readcount_sum: 0
-automatebins_no_scatterplots: false
+automatebins_no_scatterplots: true
 automatebins_max_pairs: null
 automatebins_plot_format: png
 automatebins_plot_dpi: 300
 
 # ------------------------------------------------------------
-# AutoPepsirf options (required if run_autopepsirf: true)
+# 06: External bins and controls for AutoPepsirf input preparation
 # ------------------------------------------------------------
-run_autopepsirf: false
-autopepsirf_conda_path: /Users/evanelko/anaconda3/envs/qiime2-tiny-2024.2
+# Required only when run_automate_bins: false and run_autopepsirf: true.
+# Paths are relative to the Snakemake working directory or absolute.
+# The control file is a peptide-by-sample matrix, as produced by AutomateBins;
+# its sample columns are also removed from the raw AutoPepsirf input.
+# These external paths are ignored when run_automate_bins: true.
+autopepsirf_bins_tsv: null  # e.g. /path/to/precomputed_bins.tsv
+autopepsirf_negative_control_tsv: null  # e.g. /path/to/negative_controls_CS.tsv
+
+# ------------------------------------------------------------
+# 07: AutoPepsirf
+# ------------------------------------------------------------
+run_autopepsirf: true
+autopepsirf_conda_path: /path/to/conda/envs/autopepsirf
 autopepsirf_negative_id: Sblk
 autopepsirf_exact_z_thresh: 10,10
 autopepsirf_exact_cs_thresh: 0
 autopepsirf_raw_constraint: 105000
 autopepsirf_hdi: 0.75
 autopepsirf_exact_zenrich_thresh: 25 20 15 10
-autopepsirf_tsv_base_str: IM0221_IM227_IM230_IN2T.3_raw_3mm
-autopepsirf_pepsirf_tsv_dir: IM0221_IM227_IM230_IN2T.3_TSV-aps
+autopepsirf_tsv_base_str: sample_counts
+autopepsirf_pepsirf_tsv_dir: pepsirf_tsv
 
 # ------------------------------------------------------------
-# PSEA options (required if run_psea: true; run_psea requires run_autopepsirf)
+# 08: Optional Z-score correlation QC (after AutoPepsirf)
 # ------------------------------------------------------------
-run_psea: false
-psea_conda_path: /Users/evanelko/anaconda3/envs/qiime2-pepsirf-merged
-psea_epitope_metadata: IN2T_metadata.tsv
-psea_peptide_sets_gmt: IN2T.gmt
-psea_species_tsv: IN2T_species.tsv
+# Requires run_autopepsirf: true. Runs after Z-score column shortening.
+# Currently produces separate QC outputs; PSEA uses the unfiltered Z-scores.
+run_zscore_correlation_qc: false
+zscore_pearson_cutoff: 0
+
+# ------------------------------------------------------------
+# 09: PSEA
+# ------------------------------------------------------------
+# Requires run_autopepsirf: true.
+# psea_peptide_metadata_qza must be a pre-imported QZA, not the source TSV.
+# Worker counts are configured in psea_parallel_config; align executor
+# resources with the HPC allocation at the top of this file.
+# The new PSEA command does not use psea_vis_outputs_dir.
+run_psea: true
+psea_conda_path: /path/to/conda/envs/psea
+psea_peptide_sets_gmt: /path/to/peptide_sets.gmt
+psea_species_tsv: /path/to/species.tsv
+psea_peptide_metadata_qza: /path/to/peptide_metadata.qza
+psea_parallel_config: /path/to/psea_parallel_config.toml
 psea_threshold: 0.75
 psea_pval_thresh: 0.05
 psea_nes_thresh: 1
 psea_min_size: 3
-psea_max_size: 5000
+psea_max_size: 10000
 psea_permutation_num: 10000
-psea_max_workers: 1
-psea_spline_type: py-smooth
+psea_spline_type: natural-cubic
 psea_degree: 3
-psea_vis_outputs_dir: "{output_dir}/psea/output_vis"
 psea_iterative_analysis: true
 psea_seed: 149

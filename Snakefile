@@ -53,6 +53,7 @@ RUN_TOKEN = f"{RUN_DIR}/.run_token.txt"
 # ------------------------------------------------------------
 # AutomateBins outputs
 # ------------------------------------------------------------
+RUN_AUTOMATE_BINS = config.get("run_automate_bins", True)
 AUTOBINS_PREFIX = config.get("automatebins_outprefix", "qc_filtered")
 AUTOBINS_DIR = f"{OUTPUT_DIR}/bins"
 AUTOBINS_FINAL = f"{AUTOBINS_DIR}/{AUTOBINS_PREFIX}_b300r1_bins.tsv"
@@ -64,10 +65,14 @@ AUTOBINS_NEG_CTRL = f"{AUTOBINS_DIR}/{AUTOBINS_PREFIX}_sblkOnly_CS_forBins.tsv"
 AUTOPEPSIRF_RUN_DIR = f"{OUTPUT_DIR}/autopepsirf"
 RUN_AUTOPEPSIRF = config.get("run_autopepsirf", False)
 RUN_PSEA = config.get("run_psea", False)
+RUN_RC_QC = config.get("run_rc_qc", True)
+RUN_ZERO_COUNT_QC = config.get("run_zero_count_qc", True)
+RUN_QC_SUMMARIES = config.get("run_qc_summaries", True)
 RUN_CORRELATION_QC = config.get("run_correlation_qc", True)
 RUN_ZSCORE_CORRELATION_QC = config.get("run_zscore_correlation_qc", False)
 FORCE_RERUN_WITH_TOKEN = config.get("force_rerun_with_token", False)
 AUTOPEPSIRF_CONDA_PATH = config["autopepsirf_conda_path"]
+PEPSIRF_CONDA_PATH = config["pepsirf_conda_path"]
 PYTHON_SCRIPTS_DIR = config.get("python_scripts_dir", "python_scripts")
 RULE_RESOURCES = config.get("rule_resources", {})
 
@@ -75,6 +80,22 @@ if RUN_PSEA and not RUN_AUTOPEPSIRF:
     raise ValueError("run_psea requires run_autopepsirf to be true.")
 if RUN_ZSCORE_CORRELATION_QC and not RUN_AUTOPEPSIRF:
     raise ValueError("run_zscore_correlation_qc requires run_autopepsirf to be true.")
+
+# Use the same controls for raw-input preparation and AutoPepsirf normalization.
+if RUN_AUTOMATE_BINS:
+    AUTOPEPSIRF_BINS_INPUT = AUTOBINS_FINAL
+    AUTOPEPSIRF_NEG_CTRL_INPUT = AUTOBINS_NEG_CTRL
+else:
+    AUTOPEPSIRF_BINS_INPUT = config.get("autopepsirf_bins_tsv")
+    AUTOPEPSIRF_NEG_CTRL_INPUT = config.get("autopepsirf_negative_control_tsv")
+    if RUN_AUTOPEPSIRF:
+        for key in ("autopepsirf_bins_tsv", "autopepsirf_negative_control_tsv"):
+            value = config.get(key)
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(
+                    f"{key} must be a non-empty file path when "
+                    "run_autopepsirf is true and run_automate_bins is false."
+                )
 
 AUTOPEPSIRF_EXACT_Z_THRESH = str(config["autopepsirf_exact_z_thresh"])
 AUTOPEPSIRF_EXACT_CS_THRESH = str(config["autopepsirf_exact_cs_thresh"])
@@ -150,10 +171,10 @@ def expand_output_dir_placeholder(path_value):
 
 
 def as_abs_path(path_value: str) -> str:
-    """Resolve workflow-relative paths against the Snakefile directory."""
+    """Resolve paths against Snakemake's working directory before shell cd."""
     if os.path.isabs(path_value):
         return path_value
-    return str((Path(workflow.basedir) / path_value).resolve())
+    return str(Path(path_value).resolve())
 
 
 def resolve_output_path(path_value):
@@ -197,15 +218,16 @@ ALL_TARGETS = [
     CORR_DATA_OUT,
     CORR_FAIL_OUT,
     ZERO_OUT,
-    ZERO_CS_OUT,
     ZERO_FAIL_OUT,
     ZERO_ALL_COUNTS_OUT,
     ZERO_DOWNSAMPLED_COUNTS_OUT,
-    QC_FAILURE_SUMMARY_OUT,
-    FINAL_QC_SUMMARY_OUT,
-    AUTOBINS_FINAL,
-    AUTOBINS_NEG_CTRL,
 ]
+if RUN_CORRELATION_QC:
+    ALL_TARGETS.append(ZERO_CS_OUT)
+if RUN_QC_SUMMARIES:
+    ALL_TARGETS.extend([QC_FAILURE_SUMMARY_OUT, FINAL_QC_SUMMARY_OUT])
+if RUN_AUTOMATE_BINS:
+    ALL_TARGETS.extend([AUTOBINS_FINAL, AUTOBINS_NEG_CTRL])
 if RUN_AUTOPEPSIRF:
     ALL_TARGETS.append(AUTOPEPSIRF_RAW_INPUT)
     ALL_TARGETS.append(AUTOPEPSIRF_DIFFENRICH_DIR)
@@ -289,21 +311,32 @@ rule rc_filter:
         mem_mb=rule_mem_mb("rc_filter", 4000),
         runtime=rule_runtime("rc_filter", 60)
     params:
+        enabled=str(RUN_RC_QC).lower(),
+        skip_script=script_path("skip_qc_script", "skip_qc.py"),
         script=script_path("rc_script", "QC_RC_thresh.py"),
-        cutoff=config["rc_cutoff"],
+        cutoff=config["rc_cutoff"] if RUN_RC_QC else 0,
         qc_dir=QC_DIR,
         log_dir=LOG_DIR,
-        pepsirf_conda_path=AUTOPEPSIRF_CONDA_PATH,
+        pepsirf_conda_path=PEPSIRF_CONDA_PATH,
     shell:
         """
         mkdir -p "{params.qc_dir}" "{params.log_dir}"
-        python3 "{params.script}" {input.data:q} {params.cutoff} \
-            -o {output.pass_samples:q} \
-            --failed-samples-output {output.failed:q} \
-            --all-samples-output {output.totals:q} > {log:q} 2>&1
-        conda run -p "{params.pepsirf_conda_path}" pepsirf subjoin \
-            -i "{input.data},{output.pass_samples}" \
-            -o {output.data:q} >> {log:q} 2>&1
+        if [ "{params.enabled}" = "true" ]; then
+            python3 "{params.script}" {input.data:q} {params.cutoff} \
+                -o {output.pass_samples:q} \
+                --failed-samples-output {output.failed:q} \
+                --all-samples-output {output.totals:q} > {log:q} 2>&1
+            conda run -p "{params.pepsirf_conda_path}" pepsirf subjoin \
+                -i "{input.data},{output.pass_samples}" \
+                -o {output.data:q} >> {log:q} 2>&1
+        else
+            python3 {params.skip_script:q} {input.data:q} \
+                --output {output.data:q} \
+                --pass-output {output.pass_samples:q} \
+                --failed-output {output.failed:q} \
+                --metrics-output {output.totals:q} \
+                --metric read-counts > {log:q} 2>&1
+        fi
         """
 
 
@@ -327,8 +360,10 @@ rule zero_count_filter:
         mem_mb=rule_mem_mb("zero_count_filter", 6000),
         runtime=rule_runtime("zero_count_filter", 90)
     params:
+        enabled=str(RUN_ZERO_COUNT_QC).lower(),
+        skip_script=script_path("skip_qc_script", "skip_qc.py"),
         script=script_path("zero_filter_script", "downsample2max_zero_filter.py"),
-        downsample_max=config["downsample_max"],
+        downsample_max=config["downsample_max"] if RUN_ZERO_COUNT_QC else 0,
         min_reads=config.get("downsample_min", 0),
         sd_mult=config.get("zero_sd_mult", 3.0),
         seed_arg=ZERO_SEED_ARG,
@@ -338,37 +373,47 @@ rule zero_count_filter:
             else ""
         ),
         log_dir=LOG_DIR,
-        pepsirf_conda_path=AUTOPEPSIRF_CONDA_PATH,
+        pepsirf_conda_path=PEPSIRF_CONDA_PATH,
     shell:
         """
         mkdir -p "{params.log_dir}"
-        if [ -n "{params.hist_output}" ]; then
-            python3 "{params.script}" \
-                -d {input.data:q} \
-                -o {output.pass_samples:q} \
-                --max {params.downsample_max} \
-                --min {params.min_reads} \
-                --sd-mult {params.sd_mult} \
-                --failed-samples-output {output.failed:q} \
-                --all-zero-counts-output {output.all_counts:q} \
-                --downsampled-counts-output {output.downsampled_counts:q} \
-                {params.seed_arg} \
-                --hist-output {params.hist_output:q} > {log:q} 2>&1
+        if [ "{params.enabled}" = "true" ]; then
+            if [ -n "{params.hist_output}" ]; then
+                python3 "{params.script}" \
+                    -d {input.data:q} \
+                    -o {output.pass_samples:q} \
+                    --max {params.downsample_max} \
+                    --min {params.min_reads} \
+                    --sd-mult {params.sd_mult} \
+                    --failed-samples-output {output.failed:q} \
+                    --all-zero-counts-output {output.all_counts:q} \
+                    --downsampled-counts-output {output.downsampled_counts:q} \
+                    {params.seed_arg} \
+                    --hist-output {params.hist_output:q} > {log:q} 2>&1
+            else
+                python3 "{params.script}" \
+                    -d {input.data:q} \
+                    -o {output.pass_samples:q} \
+                    --max {params.downsample_max} \
+                    --min {params.min_reads} \
+                    --sd-mult {params.sd_mult} \
+                    --failed-samples-output {output.failed:q} \
+                    --all-zero-counts-output {output.all_counts:q} \
+                    --downsampled-counts-output {output.downsampled_counts:q} \
+                    {params.seed_arg} > {log:q} 2>&1
+            fi
+            conda run -p "{params.pepsirf_conda_path}" pepsirf subjoin \
+                -i "{input.data},{output.pass_samples}" \
+                -o {output.data:q} >> {log:q} 2>&1
         else
-            python3 "{params.script}" \
-                -d {input.data:q} \
-                -o {output.pass_samples:q} \
-                --max {params.downsample_max} \
-                --min {params.min_reads} \
-                --sd-mult {params.sd_mult} \
-                --failed-samples-output {output.failed:q} \
-                --all-zero-counts-output {output.all_counts:q} \
-                --downsampled-counts-output {output.downsampled_counts:q} \
-                {params.seed_arg} > {log:q} 2>&1
+            python3 {params.skip_script:q} {input.data:q} \
+                --output {output.data:q} \
+                --pass-output {output.pass_samples:q} \
+                --failed-output {output.failed:q} \
+                --metrics-output {output.all_counts:q} \
+                --metric zero-counts > {log:q} 2>&1
+            cp {input.data:q} {output.downsampled_counts:q}
         fi
-        conda run -p "{params.pepsirf_conda_path}" pepsirf subjoin \
-            -i "{input.data},{output.pass_samples}" \
-            -o {output.data:q} >> {log:q} 2>&1
         """
 
 
@@ -389,7 +434,7 @@ rule zero_colsum_normalize:
         runtime=rule_runtime("zero_colsum_normalize", 60)
     params:
         log_dir=LOG_DIR,
-        pepsirf_conda_path=AUTOPEPSIRF_CONDA_PATH,
+        pepsirf_conda_path=PEPSIRF_CONDA_PATH,
     shell:
         """
         mkdir -p "{params.log_dir}"
@@ -405,7 +450,8 @@ rule zero_colsum_normalize:
 # ------------------------------------------------------------
 rule correlation_filter:
     input:
-        data=ZERO_CS_OUT,
+        data=ZERO_OUT,
+        norm=lambda wildcards: ZERO_CS_OUT if RUN_CORRELATION_QC else [],
         run_token=optional_run_token,
         pairs=lambda wildcards: PAIRS_FILE if RUN_CORRELATION_QC else [],
     output:
@@ -422,7 +468,7 @@ rule correlation_filter:
         runtime=rule_runtime("correlation_filter", 120)
     params:
         script=script_path("correlation_script", "pairwise_pearson_from_pairs.py"),
-        cutoff=config["pearson_cutoff"],
+        cutoff=config["pearson_cutoff"] if RUN_CORRELATION_QC else 0,
         keep_unpaired_flag=(
             "--keep-samples-not-in-pairs"
             if config.get("correlation_keep_unpaired_samples", False)
@@ -431,12 +477,12 @@ rule correlation_filter:
         enabled=str(RUN_CORRELATION_QC).lower(),
         scatter_flags=correlation_scatter_flags(),
         log_dir=LOG_DIR,
-        pepsirf_conda_path=AUTOPEPSIRF_CONDA_PATH,
+        pepsirf_conda_path=PEPSIRF_CONDA_PATH,
     shell:
         """
         mkdir -p "{params.log_dir}"
         if [ "{params.enabled}" = "true" ]; then
-            python3 "{params.script}" {input.pairs:q} {input.data:q} {params.cutoff} \
+            python3 "{params.script}" {input.pairs:q} {input.norm:q} {params.cutoff} \
                 -o {output.pairs:q} \
                 --all-correlations-output {output.pairs_all:q} \
                 --passing-samples-output {output.pass_samples:q} \
@@ -538,57 +584,60 @@ rule final_qc_summary:
 # ------------------------------------------------------------
 # 05: Automate bins (uses final QC-filtered data)
 # ------------------------------------------------------------
-rule automate_bins:
-    input:
-        data=CORR_DATA_OUT,
-        run_token=optional_run_token,
-    output:
-        bins=AUTOBINS_FINAL,
-        neg_ctrl=AUTOBINS_NEG_CTRL,
-    log:
-        f"{LOG_DIR}/05_automate_bins.log"
-    threads: rule_threads("automate_bins", 1)
-    resources:
-        mem_mb=rule_mem_mb("automate_bins", 12000),
-        runtime=rule_runtime("automate_bins", 240)
-    params:
-        script=as_abs_path(script_path("automate_bins_script", "automateBins.py")),
-        input_data=as_abs_path(CORR_DATA_OUT),
-        workdir=as_abs_path(OUTPUT_DIR),
-        log_file=as_abs_path(f"{LOG_DIR}/05_automate_bins.log"),
-        sblk_id=config["sblk_id"],
-        outprefix=AUTOBINS_PREFIX,
-        top_fraction=config.get("automatebins_top_fraction", 0.20),
-        min_readcount_sum=config.get("automatebins_min_readcount_sum", 0),
-        noscatt_arg=AUTOBINS_NOSCATT_ARG,
-        max_pairs_arg=AUTOBINS_MAX_PAIRS_ARG,
-        plot_format=config.get("automatebins_plot_format", "png"),
-        plot_dpi=config.get("automatebins_plot_dpi", 300),
-        log_dir=LOG_DIR,
-    shell:
-        """
-        mkdir -p "{params.log_dir}" "{params.workdir}"
-        cd "{params.workdir}"
-        python3 "{params.script}" \
-            -i {params.input_data:q} \
-            -s "{params.sblk_id}" \
-            -o "{params.outprefix}" \
-            --top-fraction {params.top_fraction} \
-            --min-readcount-sum {params.min_readcount_sum} \
-            --plot-format "{params.plot_format}" \
-            --plot-dpi {params.plot_dpi} \
-            {params.noscatt_arg} \
-            {params.max_pairs_arg} > "{params.log_file}" 2>&1
-        """
+if RUN_AUTOMATE_BINS:
+    rule automate_bins:
+        input:
+            data=CORR_DATA_OUT,
+            run_token=optional_run_token,
+        output:
+            bins=AUTOBINS_FINAL,
+            neg_ctrl=AUTOBINS_NEG_CTRL,
+        log:
+            f"{LOG_DIR}/05_automate_bins.log"
+        threads: rule_threads("automate_bins", 1)
+        resources:
+            mem_mb=rule_mem_mb("automate_bins", 12000),
+            runtime=rule_runtime("automate_bins", 240)
+        params:
+            script=as_abs_path(script_path("automate_bins_script", "automateBins.py")),
+            input_data=as_abs_path(CORR_DATA_OUT),
+            workdir=as_abs_path(OUTPUT_DIR),
+            log_file=as_abs_path(f"{LOG_DIR}/05_automate_bins.log"),
+            sblk_id=config["sblk_id"],
+            outprefix=AUTOBINS_PREFIX,
+            top_fraction=config.get("automatebins_top_fraction", 0.20),
+            min_readcount_sum=config.get("automatebins_min_readcount_sum", 0),
+            noscatt_arg=AUTOBINS_NOSCATT_ARG,
+            max_pairs_arg=AUTOBINS_MAX_PAIRS_ARG,
+            plot_format=config.get("automatebins_plot_format", "png"),
+            plot_dpi=config.get("automatebins_plot_dpi", 300),
+            pepsirf_path=config.get("automatebins_pepsirf_path","pepsirf"),
+            log_dir=LOG_DIR,
+        shell:
+            """
+            mkdir -p "{params.log_dir}" "{params.workdir}"
+            cd "{params.workdir}"
+            python3 "{params.script}" \
+                -i {params.input_data:q} \
+                -s "{params.sblk_id}" \
+                -o "{params.outprefix}" \
+                --top-fraction {params.top_fraction} \
+                --min-readcount-sum {params.min_readcount_sum} \
+                --plot-format "{params.plot_format}" \
+                --pepsirf-path {params.pepsirf_path:q} \
+                --plot-dpi {params.plot_dpi} \
+                {params.noscatt_arg} \
+                {params.max_pairs_arg} > "{params.log_file}" 2>&1
+            """
 
 
 # ------------------------------------------------------------
-# 06: Prepare AutoPepsirf input (remove Sblks used in bins, restore full length names)
+# 06: Prepare AutoPepsirf input (remove selected controls, restore full length names)
 # ------------------------------------------------------------
 rule prepare_autopepsirf_raw:
     input:
         raw=CORR_DATA_OUT,
-        neg_ctrl=AUTOBINS_NEG_CTRL,
+        neg_ctrl=lambda wildcards: AUTOPEPSIRF_NEG_CTRL_INPUT,
         name_map=SHORTEN_MAP,
         run_token=optional_run_token,
     output:
@@ -619,8 +668,8 @@ rule prepare_autopepsirf_raw:
 rule run_autopepsirf:
     input:
         raw=AUTOPEPSIRF_RAW_INPUT,
-        bins=AUTOBINS_FINAL,
-        neg_ctrl=AUTOBINS_NEG_CTRL,
+        bins=lambda wildcards: AUTOPEPSIRF_BINS_INPUT,
+        neg_ctrl=lambda wildcards: AUTOPEPSIRF_NEG_CTRL_INPUT,
         run_token=optional_run_token,
     output:
         diffenrich=directory(AUTOPEPSIRF_DIFFENRICH_DIR),
@@ -640,16 +689,18 @@ rule run_autopepsirf:
         hdi=AUTOPEPSIRF_HDI,
         exact_zenrich_thresh=config["autopepsirf_exact_zenrich_thresh"],
         tsv_base_str=config["autopepsirf_tsv_base_str"],
-        pepsirf_tsv_dir_path=AUTOPEPSIRF_PEPSIRF_DIR,
+        pepsirf_tsv_dir_path=as_abs_path(AUTOPEPSIRF_PEPSIRF_DIR),
         conda_path=config["autopepsirf_conda_path"],
-        outdir=AUTOPEPSIRF_DIFFENRICH_DIR,
+        outdir=as_abs_path(AUTOPEPSIRF_DIFFENRICH_DIR),
         raw_path=as_abs_path(AUTOPEPSIRF_RAW_INPUT),
-        bins_path=as_abs_path(AUTOBINS_FINAL),
-        neg_ctrl_path=as_abs_path(AUTOBINS_NEG_CTRL),
-        workdir=Q2_WORKDIR,
-        q2_home=f"{OUTPUT_DIR}/.qiime2_home",
-        tmpdir=f"{OUTPUT_DIR}/.tmp",
-        npm_cache=f"{OUTPUT_DIR}/.tmp/npm-cache",
+        bins_path=lambda wildcards, input: as_abs_path(input.bins),
+        neg_ctrl_path=lambda wildcards, input: as_abs_path(input.neg_ctrl),
+        workdir=as_abs_path(Q2_WORKDIR),
+        q2_home=as_abs_path(f"{OUTPUT_DIR}/.qiime2_home"),
+        tmpdir=as_abs_path(f"{OUTPUT_DIR}/.tmp"),
+        npm_cache=as_abs_path(f"{OUTPUT_DIR}/.tmp/npm-cache"),
+        pepsirf_path=config.get("automatebins_pepsirf_path", "pepsirf"),
+        log_file=as_abs_path(f"{LOG_DIR}/07_autopepsirf.log"),
         log_dir=LOG_DIR,
     shell:
         """
@@ -659,7 +710,8 @@ rule run_autopepsirf:
         export HOME="{params.q2_home}"
         export TMPDIR="{params.tmpdir}"
         export NPM_CONFIG_CACHE="{params.npm_cache}"
-        conda run -p "{params.conda_path}" qiime autopepsirf diffEnrich-tsv \
+        conda run -p "{params.conda_path}" qiime autopepsirf diffEnrich-tsv-no-viz \
+            --p-pepsirf-binary {params.pepsirf_path:q} \
             --p-raw-data-filepath {params.raw_path:q} \
             --p-bins-filepath {params.bins_path:q} \
             --p-negative-control-filepath {params.neg_ctrl_path:q} \
@@ -672,7 +724,7 @@ rule run_autopepsirf:
             --p-exact-zenrich-thresh {params.exact_zenrich_thresh} \
             --p-tsv-base-str "{params.tsv_base_str}" \
             --p-pepsirf-tsv-dir "{params.pepsirf_tsv_dir_path}" \
-            --output-dir "{params.outdir}" >> {log:q} 2>&1
+            --output-dir {params.outdir:q} > {params.log_file:q} 2>&1
         """
 
 
@@ -765,7 +817,7 @@ rule zscore_correlation_filter:
             else ""
         ),
         log_dir=LOG_DIR,
-        pepsirf_conda_path=AUTOPEPSIRF_CONDA_PATH,
+        pepsirf_conda_path=PEPSIRF_CONDA_PATH,
     shell:
         """
         mkdir -p "{params.log_dir}" "{QC_DIR}"
@@ -792,6 +844,8 @@ rule run_psea:
         pairs_tsv=PSEA_PAIRS_TSV,
         peptide_sets_gmt=config["psea_peptide_sets_gmt"],
         species_tsv=config["psea_species_tsv"],
+        peptide_metadata=config["psea_peptide_metadata_qza"],
+        parallel_config=config["psea_parallel_config"],
     output:
         psea_table_dir=directory(f"{OUTPUT_DIR}/psea/psea-make-psea-table"),
     log:
@@ -808,60 +862,68 @@ rule run_psea:
         min_size=config.get("psea_min_size", 3),
         max_size=config.get("psea_max_size", 5000),
         permutation_num=config.get("psea_permutation_num", 10000),
-        max_workers=config.get("psea_max_workers", rule_threads("run_psea", 1)),
         spline_type=config.get("psea_spline_type", "r-smooth"),
         degree=config.get("psea_degree", 3),
-        vis_outputs_dir=resolve_output_path(config.get("psea_vis_outputs_dir")),
-        vis_outputs_parent=(
-            os.path.dirname(resolve_output_path(config.get("psea_vis_outputs_dir")))
-            if config.get("psea_vis_outputs_dir")
-            else ""
-        ),
-        vis_outputs_flag=(
-            f'--p-vis-outputs-dir "{resolve_output_path(config.get("psea_vis_outputs_dir"))}"'
-            if config.get("psea_vis_outputs_dir")
-            else ""
-        ),
-        table_dir=f"{OUTPUT_DIR}/psea/psea_table_outdir",
         iterative_analysis=config.get("psea_iterative_analysis", True),
-        summary_tables_dir=f"{OUTPUT_DIR}/psea/psea_ae_summary_tables",
         seed=config.get("psea_seed", 149),
         zscore_path=as_abs_path(PSEA_ZSCORE_SHORT_TSV),
         pairs_path=as_abs_path(PSEA_PAIRS_TSV),
         peptide_sets_path=as_abs_path(config["psea_peptide_sets_gmt"]),
         species_path=as_abs_path(config["psea_species_tsv"]),
-        workdir=Q2_WORKDIR,
-        q2_home=f"{OUTPUT_DIR}/.qiime2_home",
+        workdir=as_abs_path(Q2_WORKDIR),
+        q2_home=as_abs_path(f"{OUTPUT_DIR}/.qiime2_home"),
         log_dir=LOG_DIR,
+        peptide_metadata_path=as_abs_path(config["psea_peptide_metadata_qza"]),
+        parallel_config_path=as_abs_path(config["psea_parallel_config"]),
+        outdir=as_abs_path(f"{OUTPUT_DIR}/psea/psea-make-psea-table"),
+        log_file=as_abs_path(f"{LOG_DIR}/09_run_psea.log"),
+        gmt_out=as_abs_path(f"{OUTPUT_DIR}/psea/peptide_sets.qza"),
+        pairs_out=as_abs_path(f"{OUTPUT_DIR}/psea/pairs.qza"),
+        zscore_out=as_abs_path(f"{OUTPUT_DIR}/psea/zscore.qza"),
+        tmpdir=as_abs_path(f"{OUTPUT_DIR}/.tmp"),
     shell:
         """
-        mkdir -p "{params.log_dir}" "{params.workdir}" "{params.q2_home}"
-        if [ -n "{params.vis_outputs_parent}" ]; then
-            mkdir -p "{params.vis_outputs_parent}"
-        fi
+        mkdir -p "{params.log_dir}" "{params.workdir}" "{params.q2_home}" "{params.tmpdir}"
+        mkdir -p "{OUTPUT_DIR}/psea"
+        exec > {params.log_file:q} 2>&1
         cd "{params.workdir}"
         export HOME="{params.q2_home}"
+        export TMPDIR="{params.tmpdir}"
+
+        conda run -p "{params.conda_path}" qiime tools import \
+            --type 'FeatureTable[Zscore]' \
+            --input-path {params.zscore_path:q} \
+            --output-path {params.zscore_out:q}
+
+        conda run -p "{params.conda_path}" qiime tools import \
+            --type 'PSEAPairs' \
+            --input-path {params.pairs_path:q} \
+            --output-path {params.pairs_out:q}
+
+        conda run -p "{params.conda_path}" qiime tools import \
+            --type 'GMT' \
+            --input-path {params.peptide_sets_path:q} \
+            --output-path {params.gmt_out:q}
 
         conda run -p "{params.conda_path}" qiime psea make-psea-table \
-            --p-scores-file {params.zscore_path:q} \
-            --p-pairs-file {params.pairs_path:q} \
-            --p-peptide-sets-file {params.peptide_sets_path:q} \
+            --i-scores {params.zscore_out:q} \
+            --i-pairs {params.pairs_out:q} \
+            --i-peptide-sets {params.gmt_out:q} \
+            --i-peptide-metadata {params.peptide_metadata_path:q} \
+            --p-use-epitope-mapping \
             --p-threshold {params.threshold} \
-            --p-p-val-thresh {params.pval_thresh} \
-            --p-nes-thresh {params.nes_thresh} \
-            --p-species-taxa-file {params.species_path:q} \
+            --p-p-value {params.pval_thresh} \
+            --p-enrichment-score {params.nes_thresh} \
+            --m-species-taxa-file {params.species_path:q} \
             --p-min-size {params.min_size} \
             --p-max-size {params.max_size} \
             --p-permutation-num {params.permutation_num} \
-            --p-max-workers {params.max_workers} \
             --p-spline-type {params.spline_type} \
             --p-degree {params.degree} \
-            --p-table-dir {params.table_dir} \
             --p-iterative-analysis {params.iterative_analysis} \
-            --p-summary-tables-dir {params.summary_tables_dir} \
             --p-seed {params.seed} \
-            {params.vis_outputs_flag} \
             --verbose \
-            --output-dir "{output.psea_table_dir}" >> {log:q} 2>&1
+            --parallel-config {params.parallel_config_path:q} \
+            --output-dir {params.outdir:q}
 
         """

@@ -13,7 +13,7 @@ rerun-incomplete: true
 keep-going: true
 printshellcmds: true
 latency-wait: 120
-restart-times: 1
+restart-times: 0
 use-conda: true
 
 # Default resources for rules that do not specify them.

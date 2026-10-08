@@ -19,9 +19,7 @@ from collections import defaultdict
 from itertools import combinations
 from pathlib import Path
 
-import matplotlib.pyplot as plt
 import pandas as pd
-import seaborn as sns
 from scipy.stats import pearsonr
 
 
@@ -36,13 +34,17 @@ class OnlyReadcountSummaryFilter(logging.Filter):
         return record.getMessage().startswith("Read count sum filter kept ")
 
 
-def setup_logging() -> None:
-    """Log everything to automateBins.log, but only one summary line to terminal."""
+def setup_logging(log_path: Path) -> None:
+    """Log everything to log_path, but only one summary line to terminal."""
+    global COMMAND_LOG_PATH
+    COMMAND_LOG_PATH = log_path
+
     formatter = logging.Formatter("%(levelname)s: %(message)s")
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
     root_logger.handlers.clear()
 
+    log_path.parent.mkdir(parents=True, exist_ok=True)
     file_handler = logging.FileHandler(COMMAND_LOG_PATH, mode="w", encoding="utf-8")
     file_handler.setLevel(logging.INFO)
     file_handler.setFormatter(formatter)
@@ -109,10 +111,20 @@ def main() -> None:
         default=300,
         help="DPI for raster scatterplots.",
     )
+    parser.add_argument(
+        "--log-file",
+        default=str(COMMAND_LOG_PATH),
+        help="Detailed log file for script progress and external command output.",
+    )
+    parser.add_argument(
+        "--pepsirf-path",
+        default="pepsirf",
+        help="Path to the pepsirf executable, or executable name if it is on PATH.",
+    )
     args = parser.parse_args()
 
     # Logging and basic validation
-    setup_logging()
+    setup_logging(Path(args.log_file))
 
     input_path = Path(args.input)
     if not input_path.exists():
@@ -123,6 +135,7 @@ def main() -> None:
     if args.min_readcount_sum < 0:
         raise SystemExit("--min-readcount-sum must be >= 0.")
 
+    pepsirf_path = args.pepsirf_path
     output_prefix = args.outfile
     bins_dir = Path("bins")
     scatterplot_dir = bins_dir / "Sblk_scatterplots"
@@ -139,7 +152,7 @@ def main() -> None:
     sblk_raw_counts_file = f"{output_prefix}_sblkOnly.tsv"
     sblk_raw_counts_path = bins_dir / sblk_raw_counts_file
     run_linux_command(
-        "pepsirf",
+        pepsirf_path,
         "subjoin",
         "-i",
         f"{input_path},{sblk_names_path}",
@@ -158,7 +171,7 @@ def main() -> None:
     # 4) Column-sum normalize filtered Sblk counts.
     sblk_csnorm_file = f"{output_prefix}_sblkOnly_CS.tsv"
     run_linux_command(
-        "pepsirf",
+        pepsirf_path,
         "norm",
         "-p",
         str(sblk_raw_counts_filtered_path),
@@ -222,7 +235,7 @@ def main() -> None:
     # 8) Subset normalized Sblks to selected controls, then build bins.
     sblk_cs_bins_file = f"{output_prefix}_sblkOnly_CS_forBins.tsv"
     run_linux_command(
-        "pepsirf",
+        pepsirf_path,
         "subjoin",
         "-i",
         f"{bins_dir / sblk_csnorm_file},{sblk_names_for_bins_path}",
@@ -232,7 +245,7 @@ def main() -> None:
 
     bins_file = f"{output_prefix}_b300r1_bins.tsv"
     run_linux_command(
-        "pepsirf",
+        pepsirf_path,
         "bin",
         "-s",
         str(bins_dir / sblk_cs_bins_file),
@@ -355,6 +368,15 @@ def plot_pairwise_scatterplots(
     max_pairs: int | None = None,
 ) -> None:
     """Create x=y scatterplots for all pairwise sample comparisons in df."""
+    try:
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+    except ImportError as exc:
+        raise SystemExit(
+            "Scatterplot generation requires matplotlib and seaborn. "
+            "Install those packages, or set automatebins_no_scatterplots: true."
+        ) from exc
+
     plotted_pairs = 0
     numeric_df = df.apply(pd.to_numeric, errors="coerce")
 
@@ -411,12 +433,17 @@ def run_linux_command(*inputs: object) -> None:
             command_log.write(f"Running: {' '.join(cmd)}\n")
             subprocess.run(cmd, check=True, stdout=command_log, stderr=command_log)
     except FileNotFoundError as exc:
-        raise SystemExit(f"Required executable not found: {cmd[0]}") from exc
+        message = f"Required executable not found: {cmd[0]}"
+        raise SystemExit(message) from exc
     except subprocess.CalledProcessError as exc:
-        raise SystemExit(
-            f"Command failed with exit code {exc.returncode}: {' '.join(cmd)}"
-        ) from exc
+        message = f"Command failed with exit code {exc.returncode}: {' '.join(cmd)}"
+        raise SystemExit(message) from exc
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except SystemExit as exc:
+        if exc.code not in (None, 0) and LOGGER.handlers:
+            LOGGER.error(str(exc))
+        raise
